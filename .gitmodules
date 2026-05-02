@@ -1,3 +1,4 @@
 [submodule "lib/cuda_matrix"]
 	path = lib/cuda_matrix
-	url = https://github.com/iibrahimddogan/CUDA-Matrix-Library
+	url = https://github.com/iibrahimddogan/CUDA-CudaMatrix-Library
+	branch = main

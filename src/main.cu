@@ -1,7 +1,7 @@
 #include <raylib.h>
 #include <iostream>
 
-
+#include "../lib/cuda_matrix/matrix_math.cuh"
 
 void DrawLine(int x1, int y1, int x2, int y2) {
     DrawLineEx({(float)x1, (float)y1}, {(float)x2, (float)y2}, 3.0f, LIGHTGRAY);
@@ -14,21 +14,19 @@ void DrawNode(int x, int y) {
 void DrawResistorVertical(int x, int y_center, const char* label, Color color) {
     int w = 20, h = 60;
     DrawRectangleLines(x - w/2, y_center - h/2, w, h, color);
-    DrawText(label, x + 20, y_center - 10, 20, GREEN); // R etiketi sağda
+    DrawText(label, x + 20, y_center - 10, 18, GREEN); 
 }
 
 void DrawResistorHorizontal(int x_center, int y, const char* label, Color color) {
     int w = 60, h = 20;
     DrawRectangleLines(x_center - w/2, y - h/2, w, h, color);
-    DrawText(label, x_center - 10, y - 35, 20, GREEN);
+    DrawText(label, x_center - 50, y - 40, 18, GREEN);
 }
 
-// Akım kaynağı fonksiyonuna "labelOnLeft" parametresi ekledik
 void DrawCurrentSource(int x, int y, bool pointsUp, const char* label, bool labelOnLeft, Color color) {
     int radius = 30;
     DrawCircleLines(x, y, radius, color);
     
-    // Ok işareti
     if (pointsUp) {
         DrawLineEx({(float)x, (float)y + 20}, {(float)x, (float)y - 15}, 2.0f, color);
         DrawTriangle({(float)x, (float)y - 25}, {(float)x - 8, (float)y - 10}, {(float)x + 8, (float)y - 10}, color);
@@ -37,101 +35,205 @@ void DrawCurrentSource(int x, int y, bool pointsUp, const char* label, bool labe
         DrawTriangle({(float)x, (float)y + 25}, {(float)x + 8, (float)y + 10}, {(float)x - 8, (float)y + 10}, color);
     }
     
-   
     if (labelOnLeft) {
-        DrawText(label, x - 60, y - 10, 20, SKYBLUE); 
+        DrawText(label, x - 110, y - 10, 18, SKYBLUE); 
     } else {
-        DrawText(label, x + 40, y - 10, 20, SKYBLUE); 
+        DrawText(label, x + 40, y - 10, 18, SKYBLUE); 
     }
 }
 
-
-
 int main() {
-    const int screenWidth = 1200;
+    const int screenWidth = 1600; 
     const int screenHeight = 960;
     
     SetConfigFlags(FLAG_MSAA_4X_HINT);
     InitWindow(screenWidth, screenHeight, "CUDA Circuit Analyzer");
     SetTargetFPS(60);
 
+    float R1 = 25.0f, R2 = 5.0f, R3 = 50.0f, R4 = 75.0f;
+    float Ig1 = 12.0f, Ig2 = 16.0f;
+
+    int selected_item = 0; 
+
+    // --- TEMEL MATRİSLER ---
+    CudaMatrix G; G.row = 2; G.col = 2; G.data = new float[4];
+    CudaMatrix G_inv; G_inv.row = 2; G_inv.col = 2; G_inv.data = new float[4];
+    CudaMatrix I_mat; I_mat.row = 2; I_mat.col = 1; I_mat.data = new float[2];
+    CudaMatrix V_mat; V_mat.row = 2; V_mat.col = 1; V_mat.data = new float[2];
+
+    // --- DUYARLILIK ANALİZİ İÇİN EKLENEN MATRİSLER ---
+    CudaMatrix dG_dR1; dG_dR1.row = 2; dG_dR1.col = 2; dG_dR1.data = new float[4];
+    CudaMatrix Temp1;  Temp1.row = 2;  Temp1.col = 1;  Temp1.data = new float[2];
+    CudaMatrix Temp2;  Temp2.row = 2;  Temp2.col = 1;  Temp2.data = new float[2];
+
+    // --- KOORDİNAT GÜNCELLEMELERİ ---
+    int offset_x = 50; 
     int y_top = 250;   
     int y_bottom = 550; 
     int y_center = 400; 
     
-    int x_ig1 = 200;    
-    int x_r1  = 400;    
-    int x_r2_center = 550; 
-    int x_r3  = 700;    
-    int x_r4  = 850;    
-    int x_ig2 = 1000;   
+    int x_ig1 = 150 + offset_x;    
+    int x_r1  = 400 + offset_x;    
+    int x_r2_center = 575 + offset_x; 
+    int x_r3  = 750 + offset_x;    
+    int x_r4  = 950 + offset_x;    
+    int x_ig2 = 1100 + offset_x;   
+
+    int panelX = 1280; 
 
     while (!WindowShouldClose()) {
         
+        if (IsKeyPressed(KEY_RIGHT)) selected_item = (selected_item + 1) % 6;
+        if (IsKeyPressed(KEY_LEFT))  selected_item = (selected_item - 1 + 6) % 6;
+
+        if (IsKeyPressed(KEY_UP)) {
+            switch(selected_item) {
+                case 0: R1 += 1.0f; break;
+                case 1: R2 += 1.0f; break;
+                case 2: R3 += 1.0f; break;
+                case 3: R4 += 1.0f; break;
+                case 4: Ig1 += 1.0f; break;
+                case 5: Ig2 += 1.0f; break;
+            }
+        }
+        if (IsKeyPressed(KEY_DOWN)) {
+            switch(selected_item) {
+                case 0: if(R1 > 1.0f) R1 -= 1.0f; break;
+                case 1: if(R2 > 1.0f) R2 -= 1.0f; break;
+                case 2: if(R3 > 1.0f) R3 -= 1.0f; break;
+                case 3: if(R4 > 1.0f) R4 -= 1.0f; break;
+                case 4: Ig1 -= 1.0f; break;
+                case 5: Ig2 -= 1.0f; break;
+            }
+        }
+
+        // --- NORMAL DEVRE ÇÖZÜMÜ ---
+        G.data[0] = (1.0f / R1) + (1.0f / R2);
+        G.data[1] = -1.0f / R2;
+        G.data[2] = -1.0f / R2;
+        G.data[3] = (1.0f / R2) + (1.0f / R3) + (1.0f / R4);
+
+        I_mat.data[0] = -Ig1; 
+        I_mat.data[1] = Ig2;
+
+        for(int i = 0; i < 4; i++) G_inv.data[i] = G.data[i];
+        
+        reverse_2x2_matrix(G_inv); 
+        mulofmatrix(G_inv, I_mat, V_mat); 
+
+        float v1_result = V_mat.data[0];
+        float v2_result = V_mat.data[1];
+
+        // --- DUYARLILIK (SENSITIVITY) ANALİZİ (R1 İÇİN) ---
+        dG_dR1.data[0] = -1.0f / (R1 * R1); // Sadece G11'de R1 var
+        dG_dR1.data[1] = 0.0f;
+        dG_dR1.data[2] = 0.0f;
+        dG_dR1.data[3] = 0.0f;
+
+        // Formül: dV = -G^-1 * (dG/dR1 * V)
+        mulofmatrix(dG_dR1, V_mat, Temp1);   // Temp1 = dG_dR1 * V_mat
+        mulofmatrix(G_inv, Temp1, Temp2);    // Temp2 = G_inv * Temp1
+        mul_scalar(Temp2, -1.0f);            // Temp2 = Temp2 * -1
+
+        float dV1_dR1 = Temp2.data[0];
+        float dV2_dR1 = Temp2.data[1];
+
         BeginDrawing();
             ClearBackground((Color){ 30, 30, 30, 255 });
-
-            DrawText("DEVRE ANALIZI", 40, 40, 24, RAYWHITE);
+            DrawText("CUDA TABANLI DEVRE ANALIZI", 40, 40, 24, RAYWHITE);
             
-
-            // 1. YATAY KABLOLAR
             DrawLine(x_ig1, y_bottom, x_ig2, y_bottom); 
             DrawLine(x_ig1, y_top, x_r1, y_top);        
             DrawLine(x_r1, y_top, x_r2_center - 30, y_top); 
             DrawLine(x_r2_center + 30, y_top, x_r3, y_top); 
             DrawLine(x_r3, y_top, x_ig2, y_top);        
-
-            // 2. DİKEY KOLLAR
-            // Ig1 Kolu
             DrawLine(x_ig1, y_top, x_ig1, y_center - 30);
             DrawLine(x_ig1, y_center + 30, x_ig1, y_bottom);
-            DrawCurrentSource(x_ig1, y_center, false, "Ig1", true, SKYBLUE); // Yazı SOLDAN
-
-            // R1 Kolu
             DrawLine(x_r1, y_top, x_r1, y_center - 30);
             DrawLine(x_r1, y_center + 30, x_r1, y_bottom);
-            DrawResistorVertical(x_r1, y_center, "R1", YELLOW);
-
-            // R3 Kolu
             DrawLine(x_r3, y_top, x_r3, y_center - 30);
             DrawLine(x_r3, y_center + 30, x_r3, y_bottom);
-            DrawResistorVertical(x_r3, y_center, "R3", YELLOW);
-
-            // R4 Kolu
             DrawLine(x_r4, y_top, x_r4, y_center - 30);
             DrawLine(x_r4, y_center + 30, x_r4, y_bottom);
-            DrawResistorVertical(x_r4, y_center, "R4", YELLOW);
-
-            // Ig2 Kolu
             DrawLine(x_ig2, y_top, x_ig2, y_center - 30);
             DrawLine(x_ig2, y_center + 30, x_ig2, y_bottom);
-            DrawCurrentSource(x_ig2, y_center, true, "Ig2", false, SKYBLUE); // Yazı SAĞDAN
 
-            // 3. YATAY ELEMAN
-            DrawResistorHorizontal(x_r2_center, y_top, "R2", YELLOW);
+            DrawCurrentSource(x_ig1, y_center, false, TextFormat("Ig1: %.1f A", Ig1), true, SKYBLUE);
+            DrawCurrentSource(x_ig2, y_center, true, TextFormat("Ig2: %.1f A", Ig2), false, SKYBLUE);
+            
+            DrawResistorVertical(x_r1, y_center, TextFormat("R1: %.1f Ohm", R1), YELLOW);
+            DrawResistorVertical(x_r3, y_center, TextFormat("R3: %.1f Ohm", R3), YELLOW);
+            DrawResistorVertical(x_r4, y_center, TextFormat("R4: %.1f Ohm", R4), YELLOW);
+            DrawResistorHorizontal(x_r2_center, y_top, TextFormat("R2: %.1f Ohm", R2), YELLOW);
 
-            // 4. DÜĞÜM NOKTALARI
             DrawNode(x_r1, y_top); 
             DrawNode(x_r3, y_top); 
             DrawNode(x_r4, y_top); 
+
+            DrawText(TextFormat("V1 = %.4f V", v1_result), x_r1 - 80, y_top - 70, 24, RED);
+            DrawText(TextFormat("V2 = %.4f V", v2_result), x_r3 - 80, y_top - 70, 24, RED);
+            DrawText(TextFormat("V2 = %.4f V", v2_result), x_r4 - 80, y_top - 70, 24, RED);
             
             DrawNode(x_r1, y_bottom);
             DrawNode(x_r3, y_bottom);
             DrawNode(x_r4, y_bottom);
+            
+            DrawText("0V (GND)", x_r1 - 40, y_bottom + 20, 18, GRAY);
+            DrawText("0V (GND)", x_r3 - 40, y_bottom + 20, 18, GRAY);
+            DrawText("0V (GND)", x_r4 - 40, y_bottom + 20, 18, GRAY);
 
-            // 5. VOLTAJ POLARİTELERİ VE ETİKETLERİ (Fotoğraftaki gibi)
-            // R1'in solu (v1)
             DrawText("+", x_r1 - 25, y_center - 35, 20, ORANGE);
-            DrawText("v1", x_r1 - 35, y_center - 10, 22, SKYBLUE); // Fotoğraftaki gibi mavi tonunda
+            DrawText("v1", x_r1 - 35, y_center - 10, 22, SKYBLUE); 
             DrawText("-", x_r1 - 25, y_center + 20, 20, ORANGE);
-
-            // R3'ün solu (v2)
+            
             DrawText("+", x_r3 - 25, y_center - 35, 20, ORANGE);
             DrawText("v2", x_r3 - 35, y_center - 10, 22, SKYBLUE);
             DrawText("-", x_r3 - 25, y_center + 20, 20, ORANGE);
 
+            DrawRectangle(panelX, 0, screenWidth - panelX, screenHeight, (Color){ 45, 45, 45, 255 });
+            DrawLine(panelX, 0, panelX, screenHeight, GRAY);
+
+            DrawText("KONTROL PANELI", panelX + 30, 40, 24, ORANGE);
+            
+            DrawText("[SOL/SAG]   : Eleman Sec", panelX + 30, 90, 16, GRAY);
+            DrawText("[YUKARI/ASAGI]: Deger Degistir", panelX + 30, 120, 16, GRAY);
+
+            DrawLine(panelX + 20, 160, screenWidth - 20, 160, GRAY);
+
+            const char* varNames[] = {"R1", "R2", "R3", "R4", "Ig1", "Ig2"};
+            float varValues[] = {R1, R2, R3, R4, Ig1, Ig2};
+            
+            for(int i = 0; i < 6; i++) {
+                int y_pos = 200 + (i * 50);
+                Color textColor = (i == selected_item) ? GREEN : RAYWHITE;
+                
+                if (i == selected_item) {
+                    DrawText(">", panelX + 15, y_pos, 22, GREEN);
+                }
+                
+                const char* unit = (i < 4) ? "Ohm" : "A";
+                DrawText(TextFormat("%s : %.1f %s", varNames[i], varValues[i], unit), panelX + 40, y_pos, 22, textColor);
+            }
+
+            // --- YENİ EKLENEN: DUYARLILIK SONUÇLARINI EKRANA BAS ---
+            DrawLine(panelX + 20, 520, screenWidth - 20, 520, GRAY);
+            DrawText("DUYARLILIK (SENSITIVITY)", panelX + 30, 540, 20, ORANGE);
+            DrawText("(R1 Direnci Icin)", panelX + 30, 565, 14, GRAY);
+            
+            DrawText(TextFormat("dV1/dR1 = %.4f", dV1_dR1), panelX + 30, 610, 22, GREEN);
+            DrawText(TextFormat("dV2/dR1 = %.4f", dV2_dR1), panelX + 30, 650, 22, GREEN);
+
         EndDrawing();
     }
+
+    // --- TEMİZLİK (EKLENEN MATRİSLER DAHİL) ---
+    delete[] G.data;
+    delete[] G_inv.data;
+    delete[] I_mat.data;
+    delete[] V_mat.data;
+    delete[] dG_dR1.data;
+    delete[] Temp1.data;
+    delete[] Temp2.data;
 
     CloseWindow();
     return 0;
