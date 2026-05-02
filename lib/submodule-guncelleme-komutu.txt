@@ -1,0 +1,10 @@
+CUDA-Circuit icindeki submodule kutuphanesini guncellemek icin:
+
+cd /home/popis/Projects/CUDA-Circuit
+git submodule update --remote --recursive
+
+Degisiklikleri ana projeye kaydetmek icin:
+
+git add .gitmodules lib/cuda_matrix
+git commit -m "Update cuda_matrix submodule"
+git push

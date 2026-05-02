@@ -55,18 +55,18 @@ int main() {
 
     int selected_item = 0; 
 
-    // --- TEMEL MATRİSLER ---
+    // matrisler
     CudaMatrix G; G.row = 2; G.col = 2; G.data = new float[4];
     CudaMatrix G_inv; G_inv.row = 2; G_inv.col = 2; G_inv.data = new float[4];
     CudaMatrix I_mat; I_mat.row = 2; I_mat.col = 1; I_mat.data = new float[2];
     CudaMatrix V_mat; V_mat.row = 2; V_mat.col = 1; V_mat.data = new float[2];
 
-    // --- DUYARLILIK ANALİZİ İÇİN EKLENEN MATRİSLER ---
+    // duyarlilik analizi
     CudaMatrix dG_dR1; dG_dR1.row = 2; dG_dR1.col = 2; dG_dR1.data = new float[4];
     CudaMatrix Temp1;  Temp1.row = 2;  Temp1.col = 1;  Temp1.data = new float[2];
     CudaMatrix Temp2;  Temp2.row = 2;  Temp2.col = 1;  Temp2.data = new float[2];
 
-    // --- KOORDİNAT GÜNCELLEMELERİ ---
+    
     int offset_x = 50; 
     int y_top = 250;   
     int y_bottom = 550; 
@@ -107,7 +107,7 @@ int main() {
             }
         }
 
-        // --- NORMAL DEVRE ÇÖZÜMÜ ---
+        
         G.data[0] = (1.0f / R1) + (1.0f / R2);
         G.data[1] = -1.0f / R2;
         G.data[2] = -1.0f / R2;
@@ -124,16 +124,16 @@ int main() {
         float v1_result = V_mat.data[0];
         float v2_result = V_mat.data[1];
 
-        // --- DUYARLILIK (SENSITIVITY) ANALİZİ (R1 İÇİN) ---
-        dG_dR1.data[0] = -1.0f / (R1 * R1); // Sadece G11'de R1 var
+        // duyarlilik r1 icin
+        dG_dR1.data[0] = -1.0f / (R1 * R1); 
         dG_dR1.data[1] = 0.0f;
         dG_dR1.data[2] = 0.0f;
         dG_dR1.data[3] = 0.0f;
 
-        // Formül: dV = -G^-1 * (dG/dR1 * V)
-        mulofmatrix(dG_dR1, V_mat, Temp1);   // Temp1 = dG_dR1 * V_mat
-        mulofmatrix(G_inv, Temp1, Temp2);    // Temp2 = G_inv * Temp1
-        mul_scalar(Temp2, -1.0f);            // Temp2 = Temp2 * -1
+        //dV = -G^-1 * (dG/dR1 * V)
+        mulofmatrix(dG_dR1, V_mat, Temp1);   
+        mulofmatrix(G_inv, Temp1, Temp2);    
+        mul_scalar(Temp2, -1.0f);            
 
         float dV1_dR1 = Temp2.data[0];
         float dV2_dR1 = Temp2.data[1];
@@ -215,7 +215,7 @@ int main() {
                 DrawText(TextFormat("%s : %.1f %s", varNames[i], varValues[i], unit), panelX + 40, y_pos, 22, textColor);
             }
 
-            // --- YENİ EKLENEN: DUYARLILIK SONUÇLARINI EKRANA BAS ---
+            
             DrawLine(panelX + 20, 520, screenWidth - 20, 520, GRAY);
             DrawText("DUYARLILIK (SENSITIVITY)", panelX + 30, 540, 20, ORANGE);
             DrawText("(R1 Direnci Icin)", panelX + 30, 565, 14, GRAY);
@@ -226,7 +226,7 @@ int main() {
         EndDrawing();
     }
 
-    // --- TEMİZLİK (EKLENEN MATRİSLER DAHİL) ---
+    
     delete[] G.data;
     delete[] G_inv.data;
     delete[] I_mat.data;
